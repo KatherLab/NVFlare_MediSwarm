@@ -338,9 +338,7 @@ def gen_client(key, id):
             "t",
         )
 
-        run_args = ["/usr/bin/zip", "-rq", "-P", key, "tmp.zip", "."]
-        print(run_args)
-        print(tmp_dir)
+        run_args = ["zip", "-rq", "-P", key, "tmp.zip", "."]
         subprocess.run(run_args, cwd=tmp_dir)
         fileobj = io.BytesIO()
         with open(os.path.join(tmp_dir, "tmp.zip"), "rb") as fo:
