@@ -5,6 +5,10 @@
 [![pyversion](https://img.shields.io/pypi/pyversions/nvflare.svg)](https://badge.fury.io/py/nvflare)
 [![downloads](https://static.pepy.tech/badge/nvflare)](https://pepy.tech/project/nvflare)
 
+# NVFlare for MediSwarm
+
+This fork of NVIDIA NVFlare is intended to contain the modifications to the original NVFlare required for integration with MediSwarm, a swarm learning system for medical imaging.
+
 # NVIDIA FLARE
 
 [NVIDIA FLARE](https://nvflare.readthedocs.io/en/main/index.html) (**NV**IDIA **F**ederated **L**earning **A**pplication **R**untime **E**nvironment)
