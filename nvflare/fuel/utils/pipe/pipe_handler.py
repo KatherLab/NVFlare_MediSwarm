@@ -60,7 +60,7 @@ class PipeHandler(object):
         read_interval=0.1,
         heartbeat_interval=5.0,
         heartbeat_timeout=30.0,
-        resend_interval=2.0,
+        resend_interval=360000.0,
         max_resends=5,
         default_request_timeout=5.0,
     ):
