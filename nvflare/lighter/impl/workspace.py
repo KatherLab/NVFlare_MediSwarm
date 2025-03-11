@@ -63,7 +63,9 @@ class WorkspaceBuilder(Builder):
         ctx["last_prod_stage"] = last
         template_file_full_path = os.path.join(self.get_resources_dir(ctx), self.template_file)
         file_path = pathlib.Path(__file__).parent.absolute()
-        shutil.copyfile(os.path.join(file_path, self.template_file), template_file_full_path)
+        if os.path.join(file_path, self.template_file) != template_file_full_path:
+            # do not copy if source and target are identical
+            shutil.copyfile(os.path.join(file_path, self.template_file), template_file_full_path)
         ctx["template_file"] = self.template_file
 
     def build(self, project: Project, ctx: dict):
