@@ -21,23 +21,13 @@ from setuptools import find_packages, setup
 
 import versioneer
 
-# read the contents of your README file
+package_name = "nvflare_mediswarm"
 
-versions = versioneer.get_versions()
-if versions["error"]:
-    today = datetime.date.today().timetuple()
-    year = today[0] % 1000
-    month = today[1]
-    day = today[2]
-    version = f"2.3.0.dev{year:02d}{month:02d}{day:02d}"
-else:
-    version = versions["version"]
-
-release = os.environ.get("NVFL_RELEASE")
-if release == "1":
-    package_name = "nvflare"
-else:
-    package_name = "nvflare-nightly"
+today = datetime.date.today().timetuple()
+year = today[0] % 1000
+month = today[1]
+day = today[2]
+version = f"1.0.rc1.dev{year:02d}{month:02d}{day:02d}"
 
 
 def package_files(
@@ -96,4 +86,3 @@ setup(
 )
 
 remove_dir(target_path=tmp_job_template_folder)
-
