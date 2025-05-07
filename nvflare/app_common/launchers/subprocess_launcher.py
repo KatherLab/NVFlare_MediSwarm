@@ -67,6 +67,9 @@ class SubprocessLauncher(Launcher):
 
     def _start_external_process(self):
         if self._process is None:
+            process = subprocess.run(['/usr/bin/env', 'bash', './custom/verifyCodeIntegrity.sh', ], cwd=self._app_dir, capture_output=True)
+            self.logger.info(process.stdout)
+
             command = self._script
             env = os.environ.copy()
             command_seq = shlex.split(command)
