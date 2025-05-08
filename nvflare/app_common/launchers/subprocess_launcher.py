@@ -67,17 +67,18 @@ class SubprocessLauncher(Launcher):
 
     def _start_external_process(self):
         if self._process is None:
-            process = subprocess.run(['/usr/bin/env', 'bash', './custom/verifyCodeIntegrity.sh', ], cwd=self._app_dir, capture_output=True)
-            self.logger.info(process.stdout)
+            process = subprocess.run(['/usr/bin/env', 'bash', '/MediSwarm/_verifyCodeIntegrity.sh', ], cwd=self._app_dir, capture_output=True)
+            self.logger.info(process.stdout.decode().rstrip())
 
-            command = self._script
-            env = os.environ.copy()
-            command_seq = shlex.split(command)
-            self._process = subprocess.Popen(
-                command_seq, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=self._app_dir, env=env
-            )
-            self._log_thread = Thread(target=log_subprocess_output, args=(self._process, self.logger))
-            self._log_thread.start()
+            if process.returncode == 0:
+                command = self._script
+                env = os.environ.copy()
+                command_seq = shlex.split(command)
+                self._process = subprocess.Popen(
+                    command_seq, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=self._app_dir, env=env
+                )
+                self._log_thread = Thread(target=log_subprocess_output, args=(self._process, self.logger))
+                self._log_thread.start()
 
     def _stop_external_process(self):
         if self._process:
