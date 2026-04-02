@@ -1,3 +1,17 @@
+# NVFlare for MediSwarm
+
+This is the [MediSwarm](https://github.com/KatherLab/MediSwarm) fork of [NVIDIA FLARE](https://github.com/NVIDIA/NVFlare), based on the upstream `2.7.2` release. It contains the following customizations:
+
+- **Extended timeouts** for slow VPN connections (cross-site workflow, FlareAgent, streaming, pipe handler, admin server)
+- **Docker launch scripts** in `master_template.yml` with interactive prompts for data/scratch directories, GPU selection, and volume mounts
+- **Code integrity verification** in `subprocess_launcher.py` before starting training processes
+- **Dashboard zip path fix** in `blob.py` for Docker environments (`/usr/bin/zip`)
+- **Package renamed** to `nvflare_mediswarm` with date-based dev versioning
+
+See the [MediSwarm repository](https://github.com/KatherLab/MediSwarm) for deployment instructions.
+
+---
+
 <img src="https://raw.githubusercontent.com/NVIDIA/NVFlare/main/docs/resources/nvidia_eye.wwPt122j.png" alt="NVIDIA Logo" width="200">
 
 # NVIDIA FLARE
