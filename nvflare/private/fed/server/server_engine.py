@@ -937,7 +937,7 @@ class ServerEngine(ServerEngineInternalSpec, StreamableEngine):
 
         return error
 
-    def _send_admin_requests(self, requests, fl_ctx: FLContext, timeout_secs=10) -> List[ClientReply]:
+    def _send_admin_requests(self, requests, fl_ctx: FLContext, timeout_secs=600) -> List[ClientReply]:
         return self.server.admin_server.send_requests(requests, fl_ctx, timeout_secs=timeout_secs)
 
     def check_client_resources(self, job: Job, resource_reqs, fl_ctx: FLContext) -> Dict[str, Tuple[bool, str]]:
@@ -953,7 +953,7 @@ class ServerEngine(ServerEngineInternalSpec, StreamableEngine):
                 requests.update({client.token: request})
         replies = []
         if requests:
-            replies = self._send_admin_requests(requests, fl_ctx, 15)
+            replies = self._send_admin_requests(requests, fl_ctx, 600)
         result = {}
         for r in replies:
             site_name = r.client_name
@@ -1012,7 +1012,7 @@ class ServerEngine(ServerEngineInternalSpec, StreamableEngine):
                 requests.update({client.token: request})
         replies = []
         if requests:
-            replies = self._send_admin_requests(requests, fl_ctx, timeout_secs=20)
+            replies = self._send_admin_requests(requests, fl_ctx, timeout_secs=600)
         return replies
 
     def register_app_command(self, topic: str, cmd_func, *args, **kwargs):

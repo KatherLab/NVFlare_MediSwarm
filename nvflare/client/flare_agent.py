@@ -73,10 +73,10 @@ class FlareAgent:
         pipe: Optional[Pipe] = None,
         read_interval=0.1,
         heartbeat_interval=5.0,
-        heartbeat_timeout=60.0,
-        resend_interval=2.0,
+        heartbeat_timeout=360000.0,
+        resend_interval=360000.0,
         max_resends=None,
-        submit_result_timeout=60.0,
+        submit_result_timeout=360000.0,
         metric_pipe: Optional[Pipe] = None,
         task_channel_name: str = PipeChannelName.TASK,
         metric_channel_name: str = PipeChannelName.METRIC,
@@ -473,10 +473,10 @@ class FlareAgentWithCellPipe(FlareAgent):
         workspace_dir: str,
         read_interval=0.1,
         heartbeat_interval=5.0,
-        heartbeat_timeout=60.0,  # increased from 30.0 — 30s too tight under large-model GC/relay
-        resend_interval=2.0,
+        heartbeat_timeout=360000.0,
+        resend_interval=360000.0,
         max_resends=None,
-        submit_result_timeout=60.0,  # increased from 30.0 — gives CJ enough time to ACK under load
+        submit_result_timeout=360000.0,
         has_metrics=False,
         download_complete_timeout=1800.0,  # new — gate subprocess exit until server finishes tensor download
         launch_once: bool = False,
