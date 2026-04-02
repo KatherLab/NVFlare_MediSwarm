@@ -158,6 +158,18 @@ class SubprocessLauncher(Launcher):
     def _start_external_process(self, fl_ctx: FLContext):
         with self._lock:
             if self._process is None:
+                # MediSwarm: verify code integrity before starting training
+                verify_script = '/MediSwarm/_verifyCodeIntegrity.sh'
+                if os.path.exists(verify_script):
+                    process = subprocess.run(
+                        ['/usr/bin/env', 'bash', verify_script],
+                        cwd=self._app_dir, capture_output=True
+                    )
+                    self.logger.info(process.stdout.decode().rstrip())
+                    if process.returncode != 0:
+                        self.logger.error("Code integrity verification failed, not starting training")
+                        return
+
                 self.logger.info("_start_external_process: launching new subprocess")
                 command = self._script
                 env = os.environ.copy()
