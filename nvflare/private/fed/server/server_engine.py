@@ -721,7 +721,7 @@ class ServerEngine(ServerEngineInternalSpec):
 
         return f"reset the server error stats for job: {job_id}"
 
-    def _send_admin_requests(self, requests, timeout_secs=10) -> List[ClientReply]:
+    def _send_admin_requests(self, requests, timeout_secs=600) -> List[ClientReply]:
         return self.server.admin_server.send_requests(requests, timeout_secs=timeout_secs)
 
     def check_client_resources(self, job: Job, resource_reqs, fl_ctx: FLContext) -> Dict[str, Tuple[bool, str]]:
@@ -737,7 +737,7 @@ class ServerEngine(ServerEngineInternalSpec):
                 requests.update({client.token: request})
         replies = []
         if requests:
-            replies = self._send_admin_requests(requests, 15)
+            replies = self._send_admin_requests(requests, 600)
         result = {}
         for r in replies:
             site_name = r.client_name
@@ -795,7 +795,7 @@ class ServerEngine(ServerEngineInternalSpec):
                 requests.update({client.token: request})
         replies = []
         if requests:
-            replies = self._send_admin_requests(requests, timeout_secs=20)
+            replies = self._send_admin_requests(requests, timeout_secs=600)
         return replies
 
     def stop_all_jobs(self):

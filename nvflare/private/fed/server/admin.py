@@ -188,7 +188,7 @@ class FedAdminServer(AdminServer):
         )
 
         self.clients = {}  # token => _Client
-        self.timeout = 10.0
+        self.timeout = 600.0
 
     def client_heartbeat(self, token, name: str):
         """Receive client heartbeat.
