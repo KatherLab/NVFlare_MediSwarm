@@ -31,29 +31,13 @@ def load_local_versioneer():
     return module
 
 
-versioneer = load_local_versioneer()
+package_name = "nvflare_mediswarm"
 
-# read the contents of your README file
-
-versions = versioneer.get_versions()
-base_version = os.environ.get("NVFL_BASE_VERSION")
-if versions["error"]:
-    today = datetime.date.today().timetuple()
-    year = today[0] % 1000
-    month = today[1]
-    day = today[2]
-    if base_version:
-        version = f"{base_version}.dev{year:02d}{month:02d}{day:02d}"
-    else:
-        version = f"2.6.0.dev{year:02d}{month:02d}{day:02d}"
-else:
-    version = versions["version"]
-
-release = os.environ.get("NVFL_RELEASE")
-if release == "1":
-    package_name = "nvflare"
-else:
-    package_name = "nvflare-nightly"
+today = datetime.date.today().timetuple()
+year = today[0] % 1000
+month = today[1]
+day = today[2]
+version = f"2.7.2.dev{year:02d}{month:02d}{day:02d}"
 
 
 def package_files(
@@ -94,7 +78,7 @@ job_templates = package_files(root="nvflare/tool/job", starting="templates")
 setup(
     name=package_name,
     version=version,
-    cmdclass=versioneer.get_cmdclass(),
+    # cmdclass=versioneer.get_cmdclass(),
     package_dir={"nvflare": "nvflare"},
     packages=find_packages(
         where=".",
