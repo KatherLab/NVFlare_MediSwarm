@@ -151,7 +151,7 @@ class FedAdminServer(AdminServer):
         file_upload_dir,
         file_download_dir,
         download_job_url="",
-        timeout: float = 10.0,
+        timeout: float = 600.0,
     ):
         """The FedAdminServer is the framework for developing admin commands.
 
