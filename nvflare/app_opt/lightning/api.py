@@ -184,8 +184,13 @@ class FLCallback(Callback):
         # the metrics will be set.
         # The subsequent validate() calls will not trigger the receive update model.
         # Hence the validate() will be validating the local model.
+        import time as _time
+        self.logger.info(f"[DIAG] on_validation_start called, metrics={self.metrics}, pl_module={pl_module is not None}")
         if pl_module and self.metrics is None:
+            _t0 = _time.monotonic()
+            self.logger.info("[DIAG] calling _receive_and_update_model...")
             self._receive_and_update_model(trainer, pl_module)
+            self.logger.info(f"[DIAG] _receive_and_update_model done in {_time.monotonic()-_t0:.2f}s")
 
     def on_validation_end(self, trainer, pl_module):
         if pl_module and self.metrics is None:
@@ -195,9 +200,15 @@ class FLCallback(Callback):
                 self.reset_state(trainer)
 
     def _receive_and_update_model(self, trainer, pl_module):
+        import time as _time
+        _t0 = _time.monotonic()
+        self.logger.info("[DIAG] _receive_and_update_model: calling _receive_model...")
         model = self._receive_model(trainer)
+        self.logger.info(f"[DIAG] _receive_model returned in {_time.monotonic()-_t0:.2f}s, model={model is not None}")
         if model:
             if model.params:
+                self.logger.info(f"[DIAG] model.params has {len(model.params)} keys, calling load_state_dict...")
+                _t1 = _time.monotonic()
                 try:
                     result = pl_module.load_state_dict(model.params, strict=self._load_state_dict_strict)
                     if result is not None:
@@ -210,28 +221,41 @@ class FLCallback(Callback):
                             self.logger.warning(
                                 f"There were unexpected keys when loading the global state_dict: {unexpected_keys}"
                             )
+                    self.logger.info(f"[DIAG] load_state_dict done in {_time.monotonic()-_t1:.2f}s")
                 except Exception as e:
                     self.logger.error(f"Failed to load state dict: {str(e)}")
                     raise RuntimeError(f"Failed to load model state dict: {str(e)}")
             if model.current_round is not None:
                 self.current_round = model.current_round
+        self.logger.info(f"[DIAG] _receive_and_update_model complete in {_time.monotonic()-_t0:.2f}s")
 
     def _receive_model(self, trainer) -> FLModel:
         """Receives model from NVFlare."""
+        import time as _time
         model = None
         _is_training = False
         _is_evaluation = False
         _is_submit_model = False
+        self.logger.info(f"[DIAG] _receive_model: rank={self.rank}")
         if self.rank == 0:
+            _t0 = _time.monotonic()
+            self.logger.info("[DIAG] _receive_model: calling receive()...")
             model = receive()
+            self.logger.info(f"[DIAG] _receive_model: receive() done in {_time.monotonic()-_t0:.2f}s")
             _is_training = is_train()
             _is_evaluation = is_evaluate()
             _is_submit_model = is_submit_model()
+            self.logger.info(f"[DIAG] _receive_model: train={_is_training}, eval={_is_evaluation}, submit={_is_submit_model}")
 
+        _t1 = _time.monotonic()
+        self.logger.info("[DIAG] _receive_model: calling strategy.broadcast(model)...")
         model = trainer.strategy.broadcast(model, src=0)
+        self.logger.info(f"[DIAG] _receive_model: broadcast(model) done in {_time.monotonic()-_t1:.2f}s")
+        _t2 = _time.monotonic()
         self._is_training = trainer.strategy.broadcast(_is_training, src=0)
         self._is_evaluation = trainer.strategy.broadcast(_is_evaluation, src=0)
         self._is_submit_model = trainer.strategy.broadcast(_is_submit_model, src=0)
+        self.logger.info(f"[DIAG] _receive_model: broadcast(flags) done in {_time.monotonic()-_t2:.2f}s")
         return model
 
     def _send_model(self, output_model: FLModel):
