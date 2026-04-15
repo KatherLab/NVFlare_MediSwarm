@@ -181,6 +181,12 @@ class SubprocessLauncher(Launcher):
                 add_custom_dir_to_path(app_custom_folder, env)
 
                 command_seq = shlex.split(command)
+                # Allow shell-style "KEY=VALUE ... prog args" prefixes in script: strip
+                # leading KEY=VALUE tokens and merge into env, since subprocess.Popen
+                # without shell=True won't interpret them as env assignments.
+                while command_seq and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", command_seq[0]):
+                    key, _, value = command_seq.pop(0).partition("=")
+                    env[key] = value
                 self._process = subprocess.Popen(
                     command_seq,
                     shell=False,
