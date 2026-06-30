@@ -75,6 +75,7 @@ class ServerSideController(Controller):
         progress_timeout: float = Constant.WORKFLOW_PROGRESS_TIMEOUT,
         private_p2p: bool = True,
         min_clients: int = 0,
+        configure_min_clients: int = 0,
     ):
         """
         Constructor
@@ -117,6 +118,11 @@ class ServerSideController(Controller):
                 0 means all participating clients are required (default, backward compatible).
                 N > 0 means the workflow proceeds as long as at least N clients are active;
                 the job only aborts when active clients drop below this threshold.
+            configure_min_clients - minimum number of clients required to complete workflow configuration before
+                the workflow can start.
+                0 means use min_clients for configuration (backward compatible).
+                Set this higher than min_clients when every client must receive the initial model before runtime
+                drop tolerance is enabled.
             private_p2p - whether to make peer-to-peer communications private.
                 When set to True, P2P communications will be encrypted.
                 Private P2P communication is an additional level of protection on basic communication security
@@ -161,6 +167,9 @@ class ServerSideController(Controller):
         if min_clients < 0:
             raise ValueError(f"min_clients must be >= 0, but got {min_clients}")
         self.min_clients = min_clients
+        if configure_min_clients < 0:
+            raise ValueError(f"configure_min_clients must be >= 0, but got {configure_min_clients}")
+        self.configure_min_clients = configure_min_clients
 
         check_positive_int("num_rounds", num_rounds)
         check_number_range("configure_task_timeout", configure_task_timeout, min_value=1)
@@ -199,6 +208,11 @@ class ServerSideController(Controller):
         if self.min_clients > 0 and self.min_clients > num_participating:
             raise RuntimeError(
                 f"min_clients ({self.min_clients}) exceeds the number of participating clients "
+                f"({num_participating}): {self.participating_clients}"
+            )
+        if self.configure_min_clients > 0 and self.configure_min_clients > num_participating:
+            raise RuntimeError(
+                f"configure_min_clients ({self.configure_min_clients}) exceeds the number of participating clients "
                 f"({num_participating}): {self.participating_clients}"
             )
 
@@ -264,7 +278,20 @@ class ServerSideController(Controller):
         )
 
         total_clients = len(self.participating_clients)
-        required = self.min_clients if self.min_clients > 0 else total_clients
+        required = (
+            self.configure_min_clients
+            if self.configure_min_clients > 0
+            else self.min_clients
+            if self.min_clients > 0
+            else total_clients
+        )
+        required_label = (
+            f"configure_min_clients={self.configure_min_clients}"
+            if self.configure_min_clients > 0
+            else f"min_clients={self.min_clients}"
+            if self.min_clients > 0
+            else "all participating clients"
+        )
         self.log_info(fl_ctx, f"sending task {self.configure_task_name} to clients {self.participating_clients}")
         start_time = time.time()
         self.broadcast_and_wait(
@@ -282,7 +309,8 @@ class ServerSideController(Controller):
         configured_count = total_clients - len(failed_clients)
         if configured_count < required:
             self.system_panic(
-                f"failed to configure clients {failed_clients}: only {configured_count}/{total_clients} configured, need {required}",
+                f"failed to configure clients {failed_clients}: only {configured_count}/{total_clients} configured, "
+                f"need {required} (configure_min_clients={self.configure_min_clients}, min_clients={self.min_clients})",
                 fl_ctx,
             )
             return
@@ -290,7 +318,7 @@ class ServerSideController(Controller):
         if failed_clients:
             self.log_warning(
                 fl_ctx,
-                f"clients {failed_clients} did not configure within timeout but min_clients={self.min_clients} "
+                f"clients {failed_clients} did not configure within timeout but {required_label} "
                 f"allows proceeding; they remain as participants and may rejoin in a later round",
             )
 
