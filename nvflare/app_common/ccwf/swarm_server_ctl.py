@@ -37,6 +37,7 @@ class SwarmServerController(ServerSideController):
         aggr_clients=None,
         train_clients=None,
         min_clients: int = 0,
+        configure_min_clients: int = 0,
     ):
         result_clients = normalize_config_arg(result_clients)
         starting_client = normalize_config_arg(starting_client)
@@ -60,6 +61,7 @@ class SwarmServerController(ServerSideController):
             progress_timeout=progress_timeout,
             private_p2p=private_p2p,
             min_clients=min_clients,
+            configure_min_clients=configure_min_clients,
         )
         if not train_clients:
             train_clients = []
