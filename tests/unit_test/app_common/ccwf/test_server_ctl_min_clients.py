@@ -71,7 +71,7 @@ def _make_controller(participating_clients=None, min_clients=0, **kwargs):
     )
 
 
-def _make_stub(clients=None, min_clients=0):
+def _make_stub(clients=None, min_clients=0, configure_min_clients=0):
     """
     Build a ServerSideController instance without calling Controller.__init__.
 
@@ -89,6 +89,7 @@ def _make_stub(clients=None, min_clients=0):
     ctrl = ServerSideController.__new__(ServerSideController)
     ctrl.participating_clients = client_names
     ctrl.min_clients = min_clients
+    ctrl.configure_min_clients = configure_min_clients
     ctrl.client_statuses = {}
     ctrl.workflow_id = "wf-test"
     ctrl.max_status_report_interval = 60.0
@@ -212,7 +213,20 @@ class TestConfigurePhase:
             _add_client_status(ctrl, c, ready=(c in ready_clients))
 
         total_clients = len(ctrl.participating_clients)
-        required = ctrl.min_clients if ctrl.min_clients > 0 else total_clients
+        required = (
+            ctrl.configure_min_clients
+            if ctrl.configure_min_clients > 0
+            else ctrl.min_clients
+            if ctrl.min_clients > 0
+            else total_clients
+        )
+        required_label = (
+            f"configure_min_clients={ctrl.configure_min_clients}"
+            if ctrl.configure_min_clients > 0
+            else f"min_clients={ctrl.min_clients}"
+            if ctrl.min_clients > 0
+            else "all participating clients"
+        )
         failed_clients = [c for c, cs in ctrl.client_statuses.items() if not cs.ready_time]
         configured_count = total_clients - len(failed_clients)
 
@@ -226,7 +240,7 @@ class TestConfigurePhase:
         elif failed_clients:
             ctrl.log_warning(
                 fl_ctx,
-                f"clients {failed_clients} did not configure but min_clients={ctrl.min_clients} allows proceeding",
+                f"clients {failed_clients} did not configure but {required_label} allows proceeding",
             )
 
     def test_all_configured_no_panic(self):
@@ -264,6 +278,21 @@ class TestConfigurePhase:
         ctrl = _make_stub(min_clients=3)
         self._run_configure_check(ctrl, ready_clients=["site-1", "site-2", "site-3"])
         ctrl.system_panic.assert_not_called()
+
+    def test_configure_min_clients_overrides_runtime_min_clients(self):
+        ctrl = _make_stub(min_clients=2, configure_min_clients=4)
+        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2", "site-3"])
+        ctrl.system_panic.assert_called_once()
+        msg = ctrl.system_panic.call_args[0][0]
+        assert "need 4" in msg
+
+    def test_configure_min_clients_allows_stricter_startup_with_runtime_tolerance(self):
+        ctrl = _make_stub(min_clients=2, configure_min_clients=3)
+        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2", "site-3"])
+        ctrl.system_panic.assert_not_called()
+        ctrl.log_warning.assert_called_once()
+        msg = ctrl.log_warning.call_args[0][1]
+        assert "configure_min_clients=3 allows proceeding" in msg
 
 
 # ---------------------------------------------------------------------------
