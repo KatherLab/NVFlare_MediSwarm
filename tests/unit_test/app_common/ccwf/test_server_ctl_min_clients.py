@@ -216,16 +216,12 @@ class TestConfigurePhase:
         required = (
             ctrl.configure_min_clients
             if ctrl.configure_min_clients > 0
-            else ctrl.min_clients
-            if ctrl.min_clients > 0
-            else total_clients
+            else ctrl.min_clients if ctrl.min_clients > 0 else total_clients
         )
         required_label = (
             f"configure_min_clients={ctrl.configure_min_clients}"
             if ctrl.configure_min_clients > 0
-            else f"min_clients={ctrl.min_clients}"
-            if ctrl.min_clients > 0
-            else "all participating clients"
+            else f"min_clients={ctrl.min_clients}" if ctrl.min_clients > 0 else "all participating clients"
         )
         failed_clients = [c for c, cs in ctrl.client_statuses.items() if not cs.ready_time]
         configured_count = total_clients - len(failed_clients)
