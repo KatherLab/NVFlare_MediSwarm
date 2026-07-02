@@ -281,16 +281,12 @@ class ServerSideController(Controller):
         required = (
             self.configure_min_clients
             if self.configure_min_clients > 0
-            else self.min_clients
-            if self.min_clients > 0
-            else total_clients
+            else self.min_clients if self.min_clients > 0 else total_clients
         )
         required_label = (
             f"configure_min_clients={self.configure_min_clients}"
             if self.configure_min_clients > 0
-            else f"min_clients={self.min_clients}"
-            if self.min_clients > 0
-            else "all participating clients"
+            else f"min_clients={self.min_clients}" if self.min_clients > 0 else "all participating clients"
         )
         self.log_info(fl_ctx, f"sending task {self.configure_task_name} to clients {self.participating_clients}")
         start_time = time.time()
