@@ -538,8 +538,11 @@ class TestFlareAgentWithCellPipeDefaults:
     download_complete_timeout to the base class.
 
     Before H3/L12: submit_result_timeout=30.0 and heartbeat_timeout=30.0 diverged
-    silently from FlareAgent base (both 60.0). download_complete_timeout was missing
-    entirely — users of this convenience class could not override it.
+    silently from the FlareAgent base. The requirement is that the convenience
+    subclass keep the *same* timeout defaults as the base — regardless of the
+    concrete value (the base was later bumped to 360000.0 for slow VPN links).
+    download_complete_timeout was also missing entirely — users of this
+    convenience class could not override it.
     """
 
     def _make_cellpipe_cls(self):
@@ -548,27 +551,29 @@ class TestFlareAgentWithCellPipeDefaults:
 
         return MagicMock(spec=CellPipe)
 
-    def test_submit_result_timeout_default_is_60(self):
-        """submit_result_timeout default must be 60.0 (was 30.0 before H3)."""
+    def test_submit_result_timeout_default_matches_base(self):
+        """submit_result_timeout default must stay aligned with the FlareAgent base."""
         import inspect
 
-        from nvflare.client.flare_agent import FlareAgentWithCellPipe
+        from nvflare.client.flare_agent import FlareAgent, FlareAgentWithCellPipe
 
-        sig = inspect.signature(FlareAgentWithCellPipe.__init__)
-        default = sig.parameters["submit_result_timeout"].default
+        sub_default = inspect.signature(FlareAgentWithCellPipe.__init__).parameters["submit_result_timeout"].default
+        base_default = inspect.signature(FlareAgent.__init__).parameters["submit_result_timeout"].default
         assert (
-            default == 60.0
-        ), f"submit_result_timeout default must be 60.0 (aligned with FlareAgent base). Got {default}"
+            sub_default == base_default
+        ), f"submit_result_timeout default must match FlareAgent base ({base_default}). Got {sub_default}"
 
-    def test_heartbeat_timeout_default_is_60(self):
-        """heartbeat_timeout default must be 60.0 (was 30.0 before L12)."""
+    def test_heartbeat_timeout_default_matches_base(self):
+        """heartbeat_timeout default must stay aligned with the FlareAgent base."""
         import inspect
 
-        from nvflare.client.flare_agent import FlareAgentWithCellPipe
+        from nvflare.client.flare_agent import FlareAgent, FlareAgentWithCellPipe
 
-        sig = inspect.signature(FlareAgentWithCellPipe.__init__)
-        default = sig.parameters["heartbeat_timeout"].default
-        assert default == 60.0, f"heartbeat_timeout default must be 60.0 (aligned with FlareAgent base). Got {default}"
+        sub_default = inspect.signature(FlareAgentWithCellPipe.__init__).parameters["heartbeat_timeout"].default
+        base_default = inspect.signature(FlareAgent.__init__).parameters["heartbeat_timeout"].default
+        assert (
+            sub_default == base_default
+        ), f"heartbeat_timeout default must match FlareAgent base ({base_default}). Got {sub_default}"
 
     def test_download_complete_timeout_param_exists(self):
         """download_complete_timeout parameter must exist with default 1800.0 (H3)."""
