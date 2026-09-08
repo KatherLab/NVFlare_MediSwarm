@@ -23,11 +23,7 @@ import versioneer
 
 package_name = "nvflare_mediswarm"
 
-today = datetime.date.today().timetuple()
-year = today[0] % 1000
-month = today[1]
-day = today[2]
-version = f"1.0.rc1.dev{year:02d}{month:02d}{day:02d}"
+version = f"1.0.1"
 
 
 def package_files(
