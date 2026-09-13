@@ -248,16 +248,12 @@ class ServerSideController(Controller):
         required = (
             self.configure_min_clients
             if self.configure_min_clients > 0
-            else self.min_clients
-            if self.min_clients > 0
-            else total_clients
+            else self.min_clients if self.min_clients > 0 else total_clients
         )
         required_label = (
             f"configure_min_clients={self.configure_min_clients}"
             if self.configure_min_clients > 0
-            else f"min_clients={self.min_clients}"
-            if self.min_clients > 0
-            else "all participating clients"
+            else f"min_clients={self.min_clients}" if self.min_clients > 0 else "all participating clients"
         )
         return required, required_label
 
@@ -318,7 +314,8 @@ class ServerSideController(Controller):
             task = self._make_configure_task(learn_config, self.configure_task_timeout)
             if need_more > 0:
                 self.log_info(
-                    fl_ctx, f"sending task {self.configure_task_name} to clients {others}; waiting for {need_more} of them"
+                    fl_ctx,
+                    f"sending task {self.configure_task_name} to clients {others}; waiting for {need_more} of them",
                 )
                 self.broadcast_and_wait(
                     task=task,
@@ -359,7 +356,10 @@ class ServerSideController(Controller):
                 f"in a later round.",
             )
 
-        self.log_info(fl_ctx, f"successfully configured clients {[c for c in self.participating_clients if c not in failed_clients]}")
+        self.log_info(
+            fl_ctx,
+            f"successfully configured clients {[c for c in self.participating_clients if c not in failed_clients]}",
+        )
         return True
 
     def control_flow(self, abort_signal: Signal, fl_ctx: FLContext):
