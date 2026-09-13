@@ -27,17 +27,15 @@ Three code paths are tested:
      - min_clients > len(participating_clients) is rejected at startup.
      - min_clients <= len(participating_clients) is accepted.
 
-  C. Configure phase (control_flow)
-     - min_clients=0: all clients must configure; any failure → system_panic.
-     - min_clients=N>0: workflow continues if configured_count >= N;
-       fewer than N configured → system_panic; warn when some fail but N is met.
+  C. Configure phase — see test_server_ctl_configure_phase.py, which drives the
+     real _configure_clients() instead of re-implementing its condition here.
 
   D. Progress monitor (_check_job_status)
      - min_clients=0: first silent client triggers system_panic immediately.
      - min_clients=N>0: panic only when active_count < N; tolerate dropouts
        as long as at least N clients are still reporting.
 
-  E. Pruned starting_client reselection (tested in TestPrunedStartingClient).
+  E. Starting client — see test_server_ctl_configure_phase.py.
 
   F. Membership update broadcast (H4 fix):
      - When clients are pruned at configure time, server broadcasts the updated
@@ -195,104 +193,8 @@ class TestStartControllerValidation:
 
 
 # ---------------------------------------------------------------------------
-# C. Configure phase — system_panic / warning logic
+# C. Configure phase — moved to test_server_ctl_configure_phase.py (drives the real code)
 # ---------------------------------------------------------------------------
-
-
-class TestConfigurePhase:
-    """Test the configured_count vs required check at the end of the configure phase.
-
-    Rather than running the full control_flow, we isolate the two-line condition
-    that matters by setting client_statuses directly (simulating what
-    _process_configure_reply does) and calling the condition inline.
-    """
-
-    def _run_configure_check(self, ctrl, ready_clients):
-        """Simulate the configure-phase result check from control_flow."""
-        for c in ctrl.participating_clients:
-            _add_client_status(ctrl, c, ready=(c in ready_clients))
-
-        total_clients = len(ctrl.participating_clients)
-        required = (
-            ctrl.configure_min_clients
-            if ctrl.configure_min_clients > 0
-            else ctrl.min_clients
-            if ctrl.min_clients > 0
-            else total_clients
-        )
-        required_label = (
-            f"configure_min_clients={ctrl.configure_min_clients}"
-            if ctrl.configure_min_clients > 0
-            else f"min_clients={ctrl.min_clients}"
-            if ctrl.min_clients > 0
-            else "all participating clients"
-        )
-        failed_clients = [c for c, cs in ctrl.client_statuses.items() if not cs.ready_time]
-        configured_count = total_clients - len(failed_clients)
-
-        fl_ctx = MagicMock()
-        if configured_count < required:
-            ctrl.system_panic(
-                f"failed to configure clients {failed_clients}: "
-                f"only {configured_count}/{total_clients} configured, need {required}",
-                fl_ctx,
-            )
-        elif failed_clients:
-            ctrl.log_warning(
-                fl_ctx,
-                f"clients {failed_clients} did not configure but {required_label} allows proceeding",
-            )
-
-    def test_all_configured_no_panic(self):
-        ctrl = _make_stub(min_clients=0)
-        self._run_configure_check(ctrl, ready_clients=_FOUR_CLIENTS)
-        ctrl.system_panic.assert_not_called()
-
-    def test_min_clients_0_one_failure_panics(self):
-        ctrl = _make_stub(min_clients=0)
-        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2", "site-3"])
-        ctrl.system_panic.assert_called_once()
-        msg = ctrl.system_panic.call_args[0][0]
-        assert "only 3/4" in msg
-
-    def test_min_clients_nonzero_enough_configured_no_panic(self):
-        ctrl = _make_stub(min_clients=2)
-        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2"])
-        ctrl.system_panic.assert_not_called()
-
-    def test_min_clients_nonzero_enough_configured_warns_about_failures(self):
-        ctrl = _make_stub(min_clients=2)
-        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2"])
-        ctrl.log_warning.assert_called_once()
-        msg = ctrl.log_warning.call_args[0][1]
-        assert "min_clients=2 allows proceeding" in msg
-
-    def test_min_clients_nonzero_too_few_configured_panics(self):
-        ctrl = _make_stub(min_clients=3)
-        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2"])
-        ctrl.system_panic.assert_called_once()
-        msg = ctrl.system_panic.call_args[0][0]
-        assert "need 3" in msg
-
-    def test_min_clients_nonzero_exactly_enough_configured_no_panic(self):
-        ctrl = _make_stub(min_clients=3)
-        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2", "site-3"])
-        ctrl.system_panic.assert_not_called()
-
-    def test_configure_min_clients_overrides_runtime_min_clients(self):
-        ctrl = _make_stub(min_clients=2, configure_min_clients=4)
-        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2", "site-3"])
-        ctrl.system_panic.assert_called_once()
-        msg = ctrl.system_panic.call_args[0][0]
-        assert "need 4" in msg
-
-    def test_configure_min_clients_allows_stricter_startup_with_runtime_tolerance(self):
-        ctrl = _make_stub(min_clients=2, configure_min_clients=3)
-        self._run_configure_check(ctrl, ready_clients=["site-1", "site-2", "site-3"])
-        ctrl.system_panic.assert_not_called()
-        ctrl.log_warning.assert_called_once()
-        msg = ctrl.log_warning.call_args[0][1]
-        assert "configure_min_clients=3 allows proceeding" in msg
 
 
 # ---------------------------------------------------------------------------
@@ -404,83 +306,8 @@ class TestProgressMonitor:
 
 
 # ---------------------------------------------------------------------------
-# E. Pruned starting_client reselection
+# E. Starting client — moved to test_server_ctl_configure_phase.py
 # ---------------------------------------------------------------------------
-
-
-class TestPrunedStartingClient:
-    """Test that a pruned starting_client is reselected from remaining active clients."""
-
-    def _run_prune_and_start(self, ctrl, ready_clients, starting_client):
-        """Simulate the configure-phase prune + starting_client reselection logic."""
-        ctrl.starting_client = starting_client
-        for c in ctrl.participating_clients:
-            _add_client_status(ctrl, c, ready=(c in ready_clients))
-
-        total_clients = len(ctrl.participating_clients)
-        required = ctrl.min_clients if ctrl.min_clients > 0 else total_clients
-        failed_clients = [c for c, cs in ctrl.client_statuses.items() if not cs.ready_time]
-        configured_count = total_clients - len(failed_clients)
-
-        fl_ctx = MagicMock()
-        if configured_count < required:
-            ctrl.system_panic(
-                f"failed to configure clients {failed_clients}: "
-                f"only {configured_count}/{total_clients} configured, need {required}",
-                fl_ctx,
-            )
-            return fl_ctx
-
-        if failed_clients:
-            ctrl.log_warning(
-                fl_ctx,
-                f"clients {failed_clients} did not configure but min_clients={ctrl.min_clients} allows proceeding",
-            )
-            for c in failed_clients:
-                ctrl.participating_clients.remove(c)
-                ctrl.result_clients = [r for r in ctrl.result_clients if r != c]
-                del ctrl.client_statuses[c]
-
-            # Reselect starting_client if it was pruned (the fix under test).
-            if ctrl.starting_client in failed_clients:
-                if not ctrl.participating_clients:
-                    ctrl.system_panic("no active clients remain after pruning; cannot start workflow", fl_ctx)
-                    return fl_ctx
-                ctrl.starting_client = ctrl.participating_clients[0]
-                ctrl.log_warning(fl_ctx, f"starting client was pruned; reselected to {ctrl.starting_client}")
-
-        return fl_ctx
-
-    def test_starting_client_not_pruned_stays_unchanged(self):
-        ctrl = _make_stub(min_clients=2)
-        ctrl.result_clients = list(_FOUR_CLIENTS)
-        self._run_prune_and_start(ctrl, ready_clients=["site-1", "site-2", "site-3"], starting_client="site-1")
-        assert ctrl.starting_client == "site-1"
-        ctrl.system_panic.assert_not_called()
-
-    def test_starting_client_pruned_reselected_from_survivors(self):
-        ctrl = _make_stub(min_clients=2)
-        ctrl.result_clients = list(_FOUR_CLIENTS)
-        # site-1 (the starting client) fails; site-2 and site-3 succeed → reselect
-        self._run_prune_and_start(ctrl, ready_clients=["site-2", "site-3"], starting_client="site-1")
-        assert ctrl.starting_client != "site-1"
-        assert ctrl.starting_client in ["site-2", "site-3"]
-        ctrl.system_panic.assert_not_called()
-
-    def test_all_clients_fail_after_pruning_panics(self):
-        ctrl = _make_stub(min_clients=1)
-        ctrl.result_clients = list(_FOUR_CLIENTS)
-        # Only site-1 needed, but site-1 is the one that fails
-        # With min_clients=1 and only one client configured → 1 >= 1 so prune fires
-        # Then starting_client=site-1 is pruned; remaining clients must be empty → panic
-        # Actually to get 0 survivors we need ALL to fail but min_clients allows proceeding
-        # Use min_clients=0 so required=total and panic happens before pruning
-        # Instead: 1 client total, it fails → configured=0 < required=1 → system_panic
-        ctrl2 = _make_stub(clients=["site-1"], min_clients=1)
-        ctrl2.result_clients = ["site-1"]
-        # site-1 fails → configured_count=0 < required=1 → panic (not reselection path)
-        self._run_prune_and_start(ctrl2, ready_clients=[], starting_client="site-1")
-        ctrl2.system_panic.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
