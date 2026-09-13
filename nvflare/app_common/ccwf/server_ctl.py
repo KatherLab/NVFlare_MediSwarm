@@ -242,6 +242,126 @@ class ServerSideController(Controller):
     def sub_flow(self, abort_signal: Signal, fl_ctx: FLContext):
         pass
 
+    def _configure_quorum(self):
+        """How many clients must configure before the workflow may proceed, and a label for logs."""
+        total_clients = len(self.participating_clients)
+        required = (
+            self.configure_min_clients
+            if self.configure_min_clients > 0
+            else self.min_clients
+            if self.min_clients > 0
+            else total_clients
+        )
+        required_label = (
+            f"configure_min_clients={self.configure_min_clients}"
+            if self.configure_min_clients > 0
+            else f"min_clients={self.min_clients}"
+            if self.min_clients > 0
+            else "all participating clients"
+        )
+        return required, required_label
+
+    def _make_configure_task(self, learn_config, timeout) -> Task:
+        shareable = Shareable()
+        shareable[Constant.CONFIG] = learn_config
+        return Task(
+            name=self.configure_task_name,
+            data=shareable,
+            timeout=timeout,
+            result_received_cb=self._process_configure_reply,
+        )
+
+    def _is_configured(self, client_name: str) -> bool:
+        cs = self.client_statuses.get(client_name)
+        return bool(cs and cs.ready_time)
+
+    def _configure_clients(self, learn_config, fl_ctx: FLContext, abort_signal: Signal) -> bool:
+        """Configure the participating clients; return True if the workflow may proceed.
+
+        The starting client is configured FIRST and on its own, and must succeed. It is the
+        client that receives the start task and has to produce the initial model from its
+        persistor, so a configure quorum that does not include it is not a usable quorum:
+        proceeding sent the start task to an unconfigured client and the run died with
+        "invalid model learnable: expect Model type but got NoneType" as soon as some other
+        client happened to answer the configure task first (min_clients < site count).
+
+        The remaining clients are then configured together, with the quorum (configure_min_clients,
+        else min_clients, else all) applied to the whole set. Clients that have not answered when
+        the quorum is reached stay participants and may rejoin in a later round.
+        """
+        total_clients = len(self.participating_clients)
+        required, required_label = self._configure_quorum()
+        start_time = time.time()
+
+        if self.starting_client:
+            self.log_info(
+                fl_ctx, f"sending task {self.configure_task_name} to starting client {self.starting_client} first"
+            )
+            self.send_and_wait(
+                task=self._make_configure_task(learn_config, self.configure_task_timeout),
+                targets=[self.starting_client],
+                fl_ctx=fl_ctx,
+                abort_signal=abort_signal,
+            )
+            if not self._is_configured(self.starting_client):
+                self.system_panic(
+                    f"starting client {self.starting_client} did not configure within "
+                    f"{self.configure_task_timeout}s; workflow {self.workflow_id} cannot start on an "
+                    f"unconfigured client. Fix that client or choose another starting_client.",
+                    fl_ctx,
+                )
+                return False
+
+        others = [c for c in self.participating_clients if c != self.starting_client]
+        if others:
+            need_more = required - (1 if self.starting_client else 0)
+            task = self._make_configure_task(learn_config, self.configure_task_timeout)
+            if need_more > 0:
+                self.log_info(
+                    fl_ctx, f"sending task {self.configure_task_name} to clients {others}; waiting for {need_more} of them"
+                )
+                self.broadcast_and_wait(
+                    task=task,
+                    targets=others,
+                    min_responses=need_more,
+                    fl_ctx=fl_ctx,
+                    abort_signal=abort_signal,
+                )
+            else:
+                # The quorum is already met by the starting client. Do not wait for the
+                # others (min_responses=0 would mean "all of them"), but keep the task
+                # standing so they configure in the background and can take learn tasks.
+                self.log_info(
+                    fl_ctx,
+                    f"sending task {self.configure_task_name} to clients {others} in the background; "
+                    f"quorum ({required_label}) already met by {self.starting_client}",
+                )
+                self.broadcast(task=task, fl_ctx=fl_ctx, targets=others, min_responses=0)
+
+        time_taken = time.time() - start_time
+        self.log_info(fl_ctx, f"client configuration took {time_taken} seconds")
+
+        failed_clients = [c for c in self.participating_clients if not self._is_configured(c)]
+        configured_count = total_clients - len(failed_clients)
+        if configured_count < required:
+            self.system_panic(
+                f"failed to configure clients {failed_clients}: only {configured_count}/{total_clients} configured, "
+                f"need {required} (configure_min_clients={self.configure_min_clients}, min_clients={self.min_clients})",
+                fl_ctx,
+            )
+            return False
+
+        if failed_clients:
+            self.log_warning(
+                fl_ctx,
+                f"clients {failed_clients} had not configured when the quorum ({required_label}) was reached "
+                f"after {time_taken:.1f}s; proceeding without them. They remain participants and may rejoin "
+                f"in a later round.",
+            )
+
+        self.log_info(fl_ctx, f"successfully configured clients {[c for c in self.participating_clients if c not in failed_clients]}")
+        return True
+
     def control_flow(self, abort_signal: Signal, fl_ctx: FLContext):
         # wait for every client to become ready
         self.log_info(fl_ctx, f"Waiting for clients to be ready: {self.participating_clients}")
@@ -266,63 +386,8 @@ class ServerSideController(Controller):
 
         self.log_info(fl_ctx, f"Workflow Config: {learn_config}")
 
-        # configure all clients
-        shareable = Shareable()
-        shareable[Constant.CONFIG] = learn_config
-
-        task = Task(
-            name=self.configure_task_name,
-            data=shareable,
-            timeout=self.configure_task_timeout,
-            result_received_cb=self._process_configure_reply,
-        )
-
-        total_clients = len(self.participating_clients)
-        required = (
-            self.configure_min_clients
-            if self.configure_min_clients > 0
-            else self.min_clients
-            if self.min_clients > 0
-            else total_clients
-        )
-        required_label = (
-            f"configure_min_clients={self.configure_min_clients}"
-            if self.configure_min_clients > 0
-            else f"min_clients={self.min_clients}"
-            if self.min_clients > 0
-            else "all participating clients"
-        )
-        self.log_info(fl_ctx, f"sending task {self.configure_task_name} to clients {self.participating_clients}")
-        start_time = time.time()
-        self.broadcast_and_wait(
-            task=task,
-            targets=self.participating_clients,
-            min_responses=required,
-            fl_ctx=fl_ctx,
-            abort_signal=abort_signal,
-        )
-
-        time_taken = time.time() - start_time
-        self.log_info(fl_ctx, f"client configuration took {time_taken} seconds")
-
-        failed_clients = [c for c, cs in self.client_statuses.items() if not cs.ready_time]
-        configured_count = total_clients - len(failed_clients)
-        if configured_count < required:
-            self.system_panic(
-                f"failed to configure clients {failed_clients}: only {configured_count}/{total_clients} configured, "
-                f"need {required} (configure_min_clients={self.configure_min_clients}, min_clients={self.min_clients})",
-                fl_ctx,
-            )
+        if not self._configure_clients(learn_config, fl_ctx, abort_signal):
             return
-
-        if failed_clients:
-            self.log_warning(
-                fl_ctx,
-                f"clients {failed_clients} did not configure within timeout but {required_label} "
-                f"allows proceeding; they remain as participants and may rejoin in a later round",
-            )
-
-        self.log_info(fl_ctx, f"successfully configured clients {self.participating_clients}")
 
         # starting the starting_client
         if self.starting_client:
