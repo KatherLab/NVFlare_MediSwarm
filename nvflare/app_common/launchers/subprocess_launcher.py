@@ -159,11 +159,10 @@ class SubprocessLauncher(Launcher):
         with self._lock:
             if self._process is None:
                 # MediSwarm: verify code integrity before starting training
-                verify_script = '/MediSwarm/_verifyCodeIntegrity.sh'
+                verify_script = "/MediSwarm/_verifyCodeIntegrity.sh"
                 if os.path.exists(verify_script):
                     process = subprocess.run(
-                        ['/usr/bin/env', 'bash', verify_script],
-                        cwd=self._app_dir, capture_output=True
+                        ["/usr/bin/env", "bash", verify_script], cwd=self._app_dir, capture_output=True
                     )
                     self.logger.info(process.stdout.decode().rstrip())
                     if process.returncode != 0:
